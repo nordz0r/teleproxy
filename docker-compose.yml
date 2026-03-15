@@ -1,0 +1,36 @@
+services:
+  telemt:
+    image: whn0thacked/telemt-docker:latest
+    container_name: telemt
+    restart: unless-stopped
+    environment:
+      RUST_LOG: "info"
+    volumes:
+      - ./data:/data:rw
+    ports:
+      - "8443:8443"
+      - "127.0.0.1:9090:9090"
+      - "127.0.0.1:9091:9091"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    command: ["/data/config.toml"]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  socks5:
+    image: 3proxy/3proxy:latest
+    container_name: socks5
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./data:/data:ro
+    entrypoint: ["/bin/3proxy"]
+    command: ["/data/3proxy.cfg"]

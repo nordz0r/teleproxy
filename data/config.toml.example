@@ -1,0 +1,36 @@
+### Telemt Config
+[general]
+use_middle_proxy = true
+
+[general.modes]
+classic = false
+secure = false
+tls = true
+
+[general.links]
+show = "*"
+public_host = "proxy.example.com"
+public_port = 8443
+
+[server]
+port = 8443
+metrics_port = 9090
+
+[server.api]
+enabled = true
+listen = "0.0.0.0:9091"
+whitelist = ["127.0.0.0/8", "172.16.0.0/12"]
+
+[[server.listeners]]
+ip = "0.0.0.0"
+
+[censorship]
+tls_domain = "www.google.com"
+mask = true
+tls_emulation = true
+tls_front_dir = "tlsfront"
+
+[access.users]
+# Users are managed via telemt-ctl or API
+# Format: username = "32_hex_chars_secret"
+# example = "00000000000000000000000000000000"

@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+API="http://127.0.0.1:9091/v1"
+SOCKS5_PASSWD="/opt/teleproxy/data/socks5_passwd"
+SOCKS5_PORT="${SOCKS5_PORT:-48731}"
+PUBLIC_HOST="${PUBLIC_HOST:-proxy.example.com}"
+MTPROTO_PORT="${MTPROTO_PORT:-8443}"
+PROG=$(basename "$0")
+
+usage() {
+    cat <<EOF
+Usage: $PROG <command> [args]
+
+User management (adds/removes in both MTProto and SOCKS5):
+  add <username>             Add user, generate secret, print links
+  del <username>             Remove user
+  list                       List all users with connection links
+  link <username>            Show links for a user (MTProto + SOCKS5)
+  stats [username]           Show connection stats (all or one user)
+
+Zabbix integration:
+  zabbix discovery           LLD JSON: discovers all users
+  zabbix conns [username]    Current connections (total or per-user)
+  zabbix octets [username]   Total bytes transferred (total or per-user)
+  zabbix ips [username]      Active unique IPs (total or per-user)
+  zabbix health              1 if healthy, 0 if not
+  zabbix users.count         Number of configured users
+
+Environment variables:
+  PUBLIC_HOST                Public hostname for links (default: proxy.example.com)
+  MTPROTO_PORT               MTProto port for links (default: 8443)
+  SOCKS5_PORT                SOCKS5 port for links (default: 48731)
+
+EOF
+    exit 1
+}
+
+api_get()  { curl -sf "${API}${1}" 2>/dev/null; }
+api_post() { curl -sf -X POST "${API}${1}" -H 'Content-Type: application/json' -d "$2" 2>/dev/null; }
+api_del()  { curl -sf -X DELETE "${API}${1}" 2>/dev/null; }
+
+get_users_data() { api_get /users | jq -r '.data'; }
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+socks5_add() {
+    local user="$1" secret="$2"
+    echo "${user}:CL:${secret}" >> "$SOCKS5_PASSWD"
+}
+
+socks5_del() {
+    local user="$1"
+    sed -i "/^${user}:/d" "$SOCKS5_PASSWD"
+}
+
+socks5_reload() {
+    docker kill -s USR1 socks5 >/dev/null 2>&1 || true
+}
+
+socks5_tg_link() {
+    local host="$1" user="$2" pass="$3"
+    echo "tg://socks?server=${host}&port=${SOCKS5_PORT}&user=${user}&pass=${pass}"
+}
+
+fix_host() {
+    local link="$1"
+    echo "$link" | sed "s/server=[^&]*/server=${PUBLIC_HOST}/;s/port=[^&]*/port=${MTPROTO_PORT}/"
+}
+
+cmd_add() {
+    local user="${1:?Username required}"
+    local secret
+    secret=$(head -c 16 /dev/urandom | xxd -p)
+
+    # Add to MTProto
+    local resp
+    resp=$(api_post /users "{\"username\":\"${user}\",\"secret\":\"${secret}\"}") \
+        || die "MTProto API call failed. Is telemt running?"
+    local ok
+    ok=$(echo "$resp" | jq -r '.ok')
+    if [ "$ok" != "true" ]; then
+        die "$(echo "$resp" | jq -r '.error.message')"
+    fi
+
+    # Add to SOCKS5
+    socks5_add "$user" "$secret"
+    socks5_reload
+
+    echo "User '${user}' added to MTProto + SOCKS5."
+    echo "Secret: ${secret}"
+    echo ""
+
+    local link
+    link=$(echo "$resp" | jq -r '.data.user.links.tls[0] // empty')
+    if [ -n "$link" ]; then
+        link=$(fix_host "$link")
+        echo "MTProto (TLS):"
+        echo "  ${link}"
+        echo "  ${link/tg:\/\//https:\/\/t.me\/}"
+    fi
+    echo ""
+    local slink
+    slink=$(socks5_tg_link "$PUBLIC_HOST" "$user" "$secret")
+    echo "SOCKS5:"
+    echo "  ${slink}"
+    echo "  ${slink/tg:\/\//https:\/\/t.me\/}"
+}
+
+cmd_del() {
+    local user="${1:?Username required}"
+
+    # Delete from MTProto
+    local resp
+    resp=$(api_del "/users/${user}") || die "MTProto API call failed"
+    local ok
+    ok=$(echo "$resp" | jq -r '.ok')
+    if [ "$ok" != "true" ]; then
+        die "$(echo "$resp" | jq -r '.error.message')"
+    fi
+
+    # Delete from SOCKS5
+    socks5_del "$user"
+    socks5_reload
+
+    echo "User '${user}' deleted from MTProto + SOCKS5."
+}
+
+cmd_list() {
+    local data
+    data=$(get_users_data) || die "API call failed"
+    local users
+    users=$(echo "$data" | jq -r '.[].username')
+    local sep="────────────────────────────────────────"
+
+    echo "$sep"
+    for u in $users; do
+        local mtlink slink pass
+        mtlink=$(echo "$data" | jq -r --arg u "$u" '.[] | select(.username == $u) | .links.tls[0] // empty')
+        mtlink=$(fix_host "$mtlink")
+        pass=$(awk -F: -v u="$u" '$1==u {print $3}' "$SOCKS5_PASSWD" 2>/dev/null)
+        slink=$(socks5_tg_link "$PUBLIC_HOST" "$u" "$pass")
+
+        printf " %-12s\n" "$u"
+        echo "  mtproto  ${mtlink}"
+        echo "  socks5   ${slink}"
+        echo "$sep"
+    done
+}
+
+cmd_link() {
+    local user="${1:?Username required}"
+    local data
+    data=$(get_users_data) || die "API call failed"
+    local link
+    link=$(echo "$data" | jq -r --arg u "$user" '.[] | select(.username == $u) | .links.tls[0] // empty')
+    [ -z "$link" ] && die "User '${user}' not found"
+
+    link=$(fix_host "$link")
+    local secret
+    secret=$(awk -F: -v u="$user" '$1==u {print $3}' "$SOCKS5_PASSWD" 2>/dev/null)
+
+    echo "MTProto (TLS):"
+    echo "  ${link}"
+    echo "  ${link/tg:\/\//https:\/\/t.me\/}"
+    echo ""
+    local slink
+    slink=$(socks5_tg_link "$PUBLIC_HOST" "$user" "${secret:-N/A}")
+    echo "SOCKS5:"
+    echo "  ${slink}"
+    echo "  ${slink/tg:\/\//https:\/\/t.me\/}"
+}
+
+cmd_stats() {
+    local user="${1:-}"
+    local data
+    data=$(get_users_data) || die "API call failed"
+    if [ -n "$user" ]; then
+        echo "$data" | jq --arg u "$user" '.[] | select(.username == $u) | {
+            username,
+            connections: .current_connections,
+            active_ips: .active_unique_ips,
+            active_ips_list: .active_unique_ips_list,
+            recent_ips: .recent_unique_ips,
+            total_bytes: .total_octets
+        }'
+    else
+        echo "$data" | jq '.[] | {
+            username,
+            connections: .current_connections,
+            active_ips: .active_unique_ips,
+            recent_ips: .recent_unique_ips,
+            total_bytes: .total_octets
+        }'
+    fi
+}
+
+# --- Zabbix ---
+
+zabbix_discovery() {
+    local data
+    data=$(get_users_data 2>/dev/null) || { echo '{"data":[]}'; return; }
+    echo "$data" | jq '[.[] | {"{#USERNAME}": .username}] | {"data": .}'
+}
+
+zabbix_health() {
+    local resp
+    resp=$(api_get /health 2>/dev/null) || { echo 0; return; }
+    echo "$resp" | jq -r 'if .ok then 1 else 0 end'
+}
+
+zabbix_users_count() {
+    local data
+    data=$(get_users_data 2>/dev/null) || { echo 0; return; }
+    echo "$data" | jq 'length'
+}
+
+zabbix_metric() {
+    local metric="$1"
+    local user="${2:-}"
+    local data
+    data=$(get_users_data 2>/dev/null) || { echo 0; return; }
+
+    local field
+    case "$metric" in
+        conns)  field="current_connections" ;;
+        octets) field="total_octets" ;;
+        ips)    field="active_unique_ips" ;;
+        *)      echo 0; return ;;
+    esac
+
+    if [ -n "$user" ]; then
+        echo "$data" | jq -r --arg u "$user" --arg f "$field" \
+            '[.[] | select(.username == $u)] | if length > 0 then .[0][$f] else 0 end'
+    else
+        echo "$data" | jq --arg f "$field" '[.[][$f]] | add // 0'
+    fi
+}
+
+# --- Main ---
+
+[ $# -lt 1 ] && usage
+
+case "$1" in
+    add)   cmd_add "${2:-}" ;;
+    del)   cmd_del "${2:-}" ;;
+    list)  cmd_list ;;
+    link)  cmd_link "${2:-}" ;;
+    stats) cmd_stats "${2:-}" ;;
+    zabbix)
+        [ $# -lt 2 ] && usage
+        case "$2" in
+            discovery)    zabbix_discovery ;;
+            health)       zabbix_health ;;
+            users.count)  zabbix_users_count ;;
+            conns|octets|ips) zabbix_metric "$2" "${3:-}" ;;
+            *) usage ;;
+        esac
+        ;;
+    *) usage ;;
+esac

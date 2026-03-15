@@ -1,0 +1,109 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: a571c0d144b14fd4a87a9d9b2aa9fcd6
+      name: Templates/Applications
+  templates:
+    - uuid: f60b750de55a4238beb9c77f3702eaef
+      template: 'Telemt MTProto Proxy'
+      name: 'Telemt MTProto Proxy'
+      description: 'Monitoring template for Telemt MTProto Proxy (Rust). Tracks health, connections, traffic, and per-user metrics via LLD.'
+      groups:
+        - name: Templates/Applications
+      items:
+        - uuid: 2fea72be32284619814c7696bb180b67
+          name: 'Telemt: Total connections'
+          key: telemt.conns.total
+          delay: 30s
+          description: 'Total active connections across all users'
+          tags:
+            - tag: component
+              value: telemt
+          triggers:
+            - uuid: fbfb244d7e5f4dd0989c22cab4c7856c
+              expression: 'max(/Telemt MTProto Proxy/telemt.conns.total,10m)=0'
+              name: 'Telemt: No active connections for 10m'
+              priority: WARNING
+              tags:
+                - tag: component
+                  value: telemt
+        - uuid: 9300f0dfdb864b7aae001ac9030c40f8
+          name: 'Telemt: Service health'
+          key: telemt.health
+          delay: 30s
+          description: '1 = healthy, 0 = down'
+          tags:
+            - tag: component
+              value: telemt
+          triggers:
+            - uuid: 5a06d4b6230c4182967d3cdea6e9589b
+              expression: 'last(/Telemt MTProto Proxy/telemt.health)=0'
+              name: 'Telemt: Service is down'
+              priority: HIGH
+              tags:
+                - tag: component
+                  value: telemt
+        - uuid: dbc813055d594ffb9d41f26794330123
+          name: 'Telemt: Total unique IPs'
+          key: telemt.ips.total
+          delay: 60s
+          description: 'Total active unique IPs across all users'
+          tags:
+            - tag: component
+              value: telemt
+        - uuid: 16cb6ef3179c4c679957907730f0612a
+          name: 'Telemt: Total traffic'
+          key: telemt.octets.total
+          delay: 30s
+          units: B
+          description: 'Total bytes transferred across all users'
+          tags:
+            - tag: component
+              value: telemt
+        - uuid: e14737b3850c4197aa6424ef39170a57
+          name: 'Telemt: Users count'
+          key: telemt.users.count
+          delay: 60s
+          description: 'Number of configured proxy users'
+          tags:
+            - tag: component
+              value: telemt
+      discovery_rules:
+        - uuid: b1b601255e104a328d26dd9b36a02c9b
+          name: 'Telemt: User discovery'
+          key: telemt.user.discovery
+          delay: 5m
+          description: 'Discovers telemt proxy users'
+          item_prototypes:
+            - uuid: e9a0696b82074d5aa603413d1a1e3504
+              name: 'Telemt: User [{#USERNAME}] connections'
+              key: 'telemt.user.conns[{#USERNAME}]'
+              delay: 30s
+              description: 'Active connections for user {#USERNAME}'
+              tags:
+                - tag: component
+                  value: telemt
+                - tag: mtproto_user
+                  value: '{#USERNAME}'
+            - uuid: 4e6e60ae833c4462b3a8a2d3f22f3877
+              name: 'Telemt: User [{#USERNAME}] unique IPs'
+              key: 'telemt.user.ips[{#USERNAME}]'
+              delay: 60s
+              description: 'Active unique IPs for user {#USERNAME}'
+              tags:
+                - tag: component
+                  value: telemt
+                - tag: mtproto_user
+                  value: '{#USERNAME}'
+            - uuid: 7926cb5edf464100925d8da6a01f14ee
+              name: 'Telemt: User [{#USERNAME}] traffic'
+              key: 'telemt.user.octets[{#USERNAME}]'
+              delay: 30s
+              units: B
+              description: 'Total bytes transferred by user {#USERNAME}'
+              tags:
+                - tag: component
+                  value: telemt
+                - tag: mtproto_user
+                  value: '{#USERNAME}'
+

@@ -23,6 +23,7 @@ zabbix_export:
             - uuid: fbfb244d7e5f4dd0989c22cab4c7856c
               expression: 'max(/Telemt MTProto Proxy/telemt.conns.total,10m)=0'
               name: 'Telemt: No active connections for 10m'
+              status: DISABLED
               priority: WARNING
               tags:
                 - tag: component

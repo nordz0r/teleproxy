@@ -1,3 +1,4 @@
 data/config.toml
 data/socks5_passwd
+data/peers.conf
 data/tlsfront/

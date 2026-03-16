@@ -131,6 +131,62 @@ Recommended tags: `component: telemt`, `mtproto_user: {#USERNAME}`
 | High | `last(/host/telemt.health)=0` |
 | Warning | `max(/host/telemt.conns.total,10m)=0` |
 
+## Cluster mode (multi-server)
+
+Teleproxy supports automatic replication across multiple servers. When you add or remove a user on any node, the change is propagated to all peers via SSH.
+
+### Setup
+
+1. **Configure SSH keys** between servers (root access):
+
+```bash
+# On each server, ensure passwordless SSH to all peers
+ssh-copy-id root@node2.example.com
+```
+
+2. **Create peers config** on each server:
+
+```bash
+# On node1 — list all OTHER nodes
+echo "node2.example.com" > /opt/teleproxy/data/peers.conf
+
+# On node2 — list all OTHER nodes
+echo "node1.example.com" > /opt/teleproxy/data/peers.conf
+```
+
+3. **Point DNS** to all nodes (round-robin A records):
+
+```
+tg.example.com  A  1.2.3.4    # node1
+tg.example.com  A  5.6.7.8    # node2
+```
+
+### Usage
+
+```bash
+# Add user — automatically replicated to all peers
+telemt-ctl add alice
+
+# Remove user — automatically replicated
+telemt-ctl del alice
+
+# Full sync — push local state to all peers (add missing, remove extra)
+telemt-ctl sync
+
+# Check peer health
+telemt-ctl peers
+
+# Local-only operation (no replication, used internally)
+telemt-ctl --local add alice
+```
+
+### How it works
+
+- `add`/`del` execute locally first, then SSH to each peer and run `telemt-ctl --local` there
+- `sync` treats the local server as the source of truth: adds missing users on peers, removes extra ones
+- Users are added with the same secret on all nodes, so `tg://` links work regardless of which server handles the connection
+- If a peer is unreachable during `add`/`del`, the operation continues — run `sync` later to fix drift
+
 ## Architecture
 
 ```
@@ -140,7 +196,8 @@ Recommended tags: `component: telemt`, `mtproto_user: {#USERNAME}`
 ├── data/
 │   ├── config.toml         # Telemt config (managed by API)
 │   ├── 3proxy.cfg          # SOCKS5 config
-│   └── socks5_passwd       # SOCKS5 users (auto-managed)
+│   ├── socks5_passwd       # SOCKS5 users (auto-managed)
+│   └── peers.conf          # Cluster peers (optional)
 └── zabbix/
     └── telemt.conf          # Zabbix Agent 2 UserParameters
 ```

@@ -6,11 +6,14 @@ SOCKS5_PASSWD="/opt/teleproxy/data/socks5_passwd"
 SOCKS5_PORT="${SOCKS5_PORT:-48731}"
 PUBLIC_HOST="${PUBLIC_HOST:-proxy.example.com}"
 MTPROTO_PORT="${MTPROTO_PORT:-8443}"
+PEERS_FILE="/opt/teleproxy/data/peers.conf"
+SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
 PROG=$(basename "$0")
+LOCAL_ONLY=false
 
 usage() {
     cat <<EOF
-Usage: $PROG <command> [args]
+Usage: $PROG [--local] <command> [args]
 
 User management (adds/removes in both MTProto and SOCKS5):
   add <username>             Add user, generate secret, print links
@@ -18,6 +21,13 @@ User management (adds/removes in both MTProto and SOCKS5):
   list                       List all users with connection links
   link <username>            Show links for a user (MTProto + SOCKS5)
   stats [username]           Show connection stats (all or one user)
+
+Cluster:
+  sync                       Push local users to all peers (full reconciliation)
+  peers                      Show configured peers and their status
+
+Options:
+  --local                    Skip peer replication (local operation only)
 
 Zabbix integration:
   zabbix discovery           LLD JSON: discovers all users
@@ -32,6 +42,9 @@ Environment variables:
   MTPROTO_PORT               MTProto port for links (default: 8443)
   SOCKS5_PORT                SOCKS5 port for links (default: 48731)
 
+Cluster config:
+  ${PEERS_FILE}    One peer hostname per line (e.g. radik.goldfinches.ru)
+
 EOF
     exit 1
 }
@@ -43,6 +56,8 @@ api_del()  { curl -sf -X DELETE "${API}${1}" 2>/dev/null; }
 get_users_data() { api_get /users | jq -r '.data'; }
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# --- SOCKS5 helpers ---
 
 socks5_add() {
     local user="$1" secret="$2"
@@ -68,10 +83,67 @@ fix_host() {
     echo "$link" | sed "s/server=[^&]*/server=${PUBLIC_HOST}/;s/port=[^&]*/port=${MTPROTO_PORT}/"
 }
 
+# --- Cluster helpers ---
+
+get_peers() {
+    [ -f "$PEERS_FILE" ] || return
+    grep -v '^\s*#' "$PEERS_FILE" | grep -v '^\s*$' || true
+}
+
+peer_run() {
+    local peer="$1"
+    shift
+    # shellcheck disable=SC2086
+    ssh $SSH_OPTS "root@${peer}" "$@"
+}
+
+replicate_add() {
+    local user="$1" secret="$2"
+    $LOCAL_ONLY && return
+    local peers
+    peers=$(get_peers) || return 0
+    [ -z "$peers" ] && return 0
+
+    for peer in $peers; do
+        echo -n "  -> ${peer}: "
+        if peer_run "$peer" "telemt-ctl --local add-with-secret ${user} ${secret}" 2>/dev/null; then
+            echo "ok"
+        else
+            echo "FAILED (will be fixed on next sync)"
+        fi
+    done
+}
+
+replicate_del() {
+    local user="$1"
+    $LOCAL_ONLY && return
+    local peers
+    peers=$(get_peers) || return 0
+    [ -z "$peers" ] && return 0
+
+    for peer in $peers; do
+        echo -n "  -> ${peer}: "
+        if peer_run "$peer" "telemt-ctl --local del ${user}" 2>/dev/null; then
+            echo "ok"
+        else
+            echo "FAILED (will be fixed on next sync)"
+        fi
+    done
+}
+
+# --- Commands ---
+
 cmd_add() {
     local user="${1:?Username required}"
     local secret
     secret=$(head -c 16 /dev/urandom | xxd -p)
+
+    cmd_add_with_secret "$user" "$secret"
+}
+
+cmd_add_with_secret() {
+    local user="${1:?Username required}"
+    local secret="${2:?Secret required}"
 
     # Add to MTProto
     local resp
@@ -80,7 +152,19 @@ cmd_add() {
     local ok
     ok=$(echo "$resp" | jq -r '.ok')
     if [ "$ok" != "true" ]; then
-        die "$(echo "$resp" | jq -r '.error.message')"
+        local errmsg
+        errmsg=$(echo "$resp" | jq -r '.error.message')
+        # If user already exists, skip silently (idempotent for sync)
+        if [[ "$errmsg" == *"already exists"* ]]; then
+            echo "User '${user}' already exists in MTProto, skipping."
+            # Ensure SOCKS5 entry exists
+            if ! grep -q "^${user}:" "$SOCKS5_PASSWD" 2>/dev/null; then
+                socks5_add "$user" "$secret"
+                socks5_reload
+            fi
+            return 0
+        fi
+        die "$errmsg"
     fi
 
     # Add to SOCKS5
@@ -88,6 +172,11 @@ cmd_add() {
     socks5_reload
 
     echo "User '${user}' added to MTProto + SOCKS5."
+
+    if $LOCAL_ONLY; then
+        return 0
+    fi
+
     echo "Secret: ${secret}"
     echo ""
 
@@ -105,6 +194,10 @@ cmd_add() {
     echo "SOCKS5:"
     echo "  ${slink}"
     echo "  ${slink/tg:\/\//https:\/\/t.me\/}"
+
+    echo ""
+    echo "Replicating to peers..."
+    replicate_add "$user" "$secret"
 }
 
 cmd_del() {
@@ -116,14 +209,28 @@ cmd_del() {
     local ok
     ok=$(echo "$resp" | jq -r '.ok')
     if [ "$ok" != "true" ]; then
-        die "$(echo "$resp" | jq -r '.error.message')"
+        local errmsg
+        errmsg=$(echo "$resp" | jq -r '.error.message')
+        if [[ "$errmsg" == *"not found"* ]]; then
+            echo "User '${user}' not found in MTProto, skipping."
+        else
+            die "$errmsg"
+        fi
     fi
 
     # Delete from SOCKS5
     socks5_del "$user"
     socks5_reload
 
+    # Reload telemt config (flush in-memory cache)
+    docker kill -s HUP telemt >/dev/null 2>&1 || true
+
     echo "User '${user}' deleted from MTProto + SOCKS5."
+
+    if ! $LOCAL_ONLY; then
+        echo "Replicating to peers..."
+        replicate_del "$user"
+    fi
 }
 
 cmd_list() {
@@ -195,6 +302,93 @@ cmd_stats() {
     fi
 }
 
+cmd_sync() {
+    local peers
+    peers=$(get_peers) || die "No peers configured in ${PEERS_FILE}"
+    [ -z "$peers" ] && die "No peers configured in ${PEERS_FILE}"
+
+    # Collect local users and their secrets
+    local data
+    data=$(get_users_data) || die "API call failed"
+    local local_users
+    local_users=$(echo "$data" | jq -r '.[].username' | sort)
+
+    if [ -z "$local_users" ]; then
+        echo "No local users to sync."
+        return 0
+    fi
+
+    echo "Local users: $(echo $local_users | tr '\n' ' ')"
+    echo ""
+
+    for peer in $peers; do
+        echo "=== Syncing to ${peer} ==="
+
+        # Get remote users
+        local remote_users
+        remote_users=$(peer_run "$peer" "telemt-ctl --local list-users-plain" 2>/dev/null || echo "")
+
+        # Add missing users to remote
+        for u in $local_users; do
+            if echo "$remote_users" | grep -qx "$u"; then
+                echo "  ${u}: exists"
+            else
+                local secret
+                secret=$(awk -F: -v u="$u" '$1==u {print $3}' "$SOCKS5_PASSWD" 2>/dev/null)
+                if [ -z "$secret" ]; then
+                    echo "  ${u}: SKIP (no secret in local socks5_passwd)"
+                    continue
+                fi
+                echo -n "  ${u}: adding... "
+                if peer_run "$peer" "telemt-ctl --local add-with-secret ${u} ${secret}" 2>/dev/null; then
+                    echo "ok"
+                else
+                    echo "FAILED"
+                fi
+            fi
+        done
+
+        # Remove extra users from remote
+        for u in $remote_users; do
+            [ -z "$u" ] && continue
+            if ! echo "$local_users" | grep -qx "$u"; then
+                echo -n "  ${u}: removing (not in local)... "
+                if peer_run "$peer" "telemt-ctl --local del ${u}" 2>/dev/null; then
+                    echo "ok"
+                else
+                    echo "FAILED"
+                fi
+            fi
+        done
+
+        echo ""
+    done
+    echo "Sync complete."
+}
+
+cmd_list_users_plain() {
+    local data
+    data=$(get_users_data 2>/dev/null) || return 0
+    echo "$data" | jq -r '.[].username' | sort
+}
+
+cmd_peers() {
+    local peers
+    peers=$(get_peers) || { echo "No peers configured in ${PEERS_FILE}"; return; }
+    [ -z "$peers" ] && { echo "No peers configured in ${PEERS_FILE}"; return; }
+
+    for peer in $peers; do
+        echo -n "${peer}: "
+        if peer_run "$peer" "telemt-ctl --local zabbix health" 2>/dev/null | grep -q "1"; then
+            local count
+            count=$(peer_run "$peer" "telemt-ctl --local zabbix users.count" 2>/dev/null || echo "?")
+            echo "healthy (${count} users)"
+        else
+            echo "unreachable or unhealthy"
+        fi
+    done
+}
+
 # --- Zabbix ---
 
 zabbix_discovery() {
@@ -241,12 +435,23 @@ zabbix_metric() {
 
 [ $# -lt 1 ] && usage
 
+# Parse --local flag
+if [ "$1" = "--local" ]; then
+    LOCAL_ONLY=true
+    shift
+    [ $# -lt 1 ] && usage
+fi
+
 case "$1" in
-    add)   cmd_add "${2:-}" ;;
-    del)   cmd_del "${2:-}" ;;
-    list)  cmd_list ;;
-    link)  cmd_link "${2:-}" ;;
-    stats) cmd_stats "${2:-}" ;;
+    add)              cmd_add "${2:-}" ;;
+    add-with-secret)  cmd_add_with_secret "${2:-}" "${3:-}" ;;
+    del)              cmd_del "${2:-}" ;;
+    list)             cmd_list ;;
+    list-users-plain) cmd_list_users_plain ;;
+    link)             cmd_link "${2:-}" ;;
+    stats)            cmd_stats "${2:-}" ;;
+    sync)             cmd_sync ;;
+    peers)            cmd_peers ;;
     zabbix)
         [ $# -lt 2 ] && usage
         case "$2" in

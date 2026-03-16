@@ -1,0 +1,7 @@
+# Teleproxy cluster peers — one hostname per line
+# These are remote servers that will be kept in sync.
+# SSH key-based root access is required to each peer.
+#
+# Example:
+# node2.example.com
+# node3.example.com

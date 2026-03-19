@@ -49,9 +49,9 @@ EOF
     exit 1
 }
 
-api_get()  { curl -sf "${API}${1}" 2>/dev/null; }
-api_post() { curl -sf -X POST "${API}${1}" -H 'Content-Type: application/json' -d "$2" 2>/dev/null; }
-api_del()  { curl -sf -X DELETE "${API}${1}" 2>/dev/null; }
+api_get()  { curl -s "${API}${1}" 2>/dev/null; }
+api_post() { curl -s -X POST "${API}${1}" -H 'Content-Type: application/json' -d "$2" 2>/dev/null; }
+api_del()  { curl -s -X DELETE "${API}${1}" 2>/dev/null; }
 
 get_users_data() { api_get /users | jq -r '.data'; }
 

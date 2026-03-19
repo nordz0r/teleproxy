@@ -3,14 +3,15 @@ services:
     image: whn0thacked/telemt-docker:latest
     container_name: telemt
     restart: unless-stopped
+    network_mode: host
     environment:
       RUST_LOG: "info"
     volumes:
       - ./data:/data:rw
-    ports:
-      - "8443:8443"
-      - "127.0.0.1:9090:9090"
-      - "127.0.0.1:9091:9091"
+    expose:
+      - "8443"
+      - "9090"
+      - "9091"
     security_opt:
       - no-new-privileges:true
     cap_drop:

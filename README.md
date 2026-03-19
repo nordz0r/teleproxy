@@ -18,37 +18,59 @@ Both services share the same user credentials. Adding a user via `telemt-ctl` re
 ```bash
 git clone https://github.com/nordz0r/teleproxy.git /opt/teleproxy
 cd /opt/teleproxy
+cp .env.example .env
 cp data/config.toml.example data/config.toml
 ```
 
-Edit `data/config.toml`:
-- Set `public_host` to your server's domain
-- Set `tls_domain` to **your own domain that resolves to this server IP**
-  (recommended: same value as `public_host`, e.g. `proxy.example.com`)
+Edit `.env`:
+- Set `TELEPROXY_DOMAIN` to your server's domain
+- Optionally override `PUBLIC_HOST`, `TLS_DOMAIN`, `MTPROTO_PORT`, `SOCKS5_PORT`
 
 > ⚠️ If you run Telegram through xray/sing-box (or another SNI-aware L7 router),
-> using third-party `tls_domain` like `www.google.com` can break MTProto:
+> using third-party `TLS_DOMAIN` like `www.google.com` can break MTProto:
 > the router may route traffic by SNI to the original website instead of your telemt host.
 > Use a domain you control that points to your telemt server.
 
-Edit `telemt-ctl`:
-- Set `PUBLIC_HOST` to your server's domain
+Generate or refresh `data/config.toml` host fields from env:
+
+```bash
+./telemt-ctl config-sync-env
+```
+
+`telemt-ctl` reads `/opt/teleproxy/.env` by default, so the env file is the source of truth
+for generated links and for the host-related values written into `data/config.toml`.
 
 ### FAQ: domain from env + certificates
 
 **Q: I already have a domain in an environment variable. Can I reuse it?**  
 Yes. Use the same domain value in both places:
-- `PUBLIC_HOST` (for generated links in `telemt-ctl`)
-- `tls_domain` in `data/config.toml` (for MTProto Fake TLS SNI)
+- `TELEPROXY_DOMAIN` / `PUBLIC_HOST` (for generated links in `telemt-ctl`)
+- `TLS_DOMAIN` in `data/config.toml` via `telemt-ctl config-sync-env`
 
 Example:
 
 ```bash
 export TELEPROXY_DOMAIN=proxy.example.com
-PUBLIC_HOST="$TELEPROXY_DOMAIN" telemt-ctl list
+./telemt-ctl config-sync-env
+./telemt-ctl list
 ```
 
-And set in `data/config.toml`:
+To override values in your current terminal or interactive shell,
+export them manually or put them in `.env` / `~/.bashrc`:
+
+```bash
+export TELEPROXY_DOMAIN=proxy.example.com
+export PUBLIC_HOST="$TELEPROXY_DOMAIN"
+export MTPROTO_PORT=8443
+export SOCKS5_PORT=48731
+```
+
+If you run `telemt-ctl` through a non-interactive SSH command like
+`ssh root@host '/opt/teleproxy/telemt-ctl list'`, `~/.bashrc` may not be loaded.
+`telemt-ctl` avoids that problem by loading `/opt/teleproxy/.env` directly.
+If you keep env only in `~/.bashrc`, pass the vars inline or source the file explicitly.
+
+After `./telemt-ctl config-sync-env`, `data/config.toml` should contain:
 
 ```toml
 [general.links]
@@ -73,6 +95,7 @@ The telemt container runs as UID 65532 (nonroot) and needs write access to persi
 ### 3. Start
 
 ```bash
+./telemt-ctl config-sync-env
 docker compose up -d
 ```
 
@@ -122,9 +145,12 @@ telemt-ctl stats [username]    # Connection stats (all or one)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PUBLIC_HOST` | `proxy.example.com` | Hostname used in generated links |
-| `MTPROTO_PORT` | `8443` | MTProto port in links |
+| `TELEPROXY_DOMAIN` | `proxy.example.com` | Shared default for links and TLS SNI |
+| `PUBLIC_HOST` | `TELEPROXY_DOMAIN` | Hostname used in generated links |
+| `TLS_DOMAIN` | `TELEPROXY_DOMAIN` | TLS SNI written into `data/config.toml` |
+| `MTPROTO_PORT` | `8443` | MTProto port in links and config |
 | `SOCKS5_PORT` | `48731` | SOCKS5 port in links |
+| `TELEPROXY_ENV_FILE` | `/opt/teleproxy/.env` | Path to env file loaded by `telemt-ctl` |
 
 Override per-call: `PUBLIC_HOST=other.host telemt-ctl list`
 

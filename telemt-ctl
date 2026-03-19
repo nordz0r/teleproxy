@@ -2,14 +2,36 @@
 set -euo pipefail
 
 API="http://127.0.0.1:9091/v1"
+CONFIG_FILE="/opt/teleproxy/data/config.toml"
+ENV_FILE="${TELEPROXY_ENV_FILE:-/opt/teleproxy/.env}"
 SOCKS5_PASSWD="/opt/teleproxy/data/socks5_passwd"
 SOCKS5_PORT="${SOCKS5_PORT:-48731}"
-PUBLIC_HOST="${PUBLIC_HOST:-proxy.example.com}"
-MTPROTO_PORT="${MTPROTO_PORT:-8443}"
 PEERS_FILE="/opt/teleproxy/data/peers.conf"
 SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
 PROG=$(basename "$0")
 LOCAL_ONLY=false
+
+load_env_file() {
+    [ -f "$ENV_FILE" ] || return 0
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+}
+
+replace_toml_value() {
+    local key="$1" value="$2"
+    sed -i -E "s|^([[:space:]]*${key}[[:space:]]*=[[:space:]]*).*$|\\1\"${value}\"|" "$CONFIG_FILE"
+}
+
+replace_toml_number() {
+    local key="$1" value="$2"
+    sed -i -E "s|^([[:space:]]*${key}[[:space:]]*=[[:space:]]*).*$|\\1${value}|" "$CONFIG_FILE"
+}
+
+load_env_file
+
+PUBLIC_HOST="${PUBLIC_HOST:-${TELEPROXY_DOMAIN:-proxy.example.com}}"
+TLS_DOMAIN="${TLS_DOMAIN:-${TELEPROXY_DOMAIN:-$PUBLIC_HOST}}"
+MTPROTO_PORT="${MTPROTO_PORT:-8443}"
 
 usage() {
     cat <<EOF
@@ -21,6 +43,7 @@ User management (adds/removes in both MTProto and SOCKS5):
   list                       List all users with connection links
   link <username>            Show links for a user (MTProto + SOCKS5)
   stats [username]           Show connection stats (all or one user)
+  config-sync-env            Update data/config.toml host fields from env
 
 Cluster:
   sync                       Push local users to all peers (full reconciliation)
@@ -38,9 +61,12 @@ Zabbix integration:
   zabbix users.count         Number of configured users
 
 Environment variables:
-  PUBLIC_HOST                Public hostname for links (default: proxy.example.com)
-  MTPROTO_PORT               MTProto port for links (default: 8443)
+  TELEPROXY_DOMAIN           Shared domain for links and TLS SNI
+  PUBLIC_HOST                Public hostname for links (default: TELEPROXY_DOMAIN)
+  TLS_DOMAIN                 TLS SNI domain for telemt (default: TELEPROXY_DOMAIN)
+  MTPROTO_PORT               MTProto port for links/config (default: 8443)
   SOCKS5_PORT                SOCKS5 port for links (default: 48731)
+  TELEPROXY_ENV_FILE         Path to env file (default: /opt/teleproxy/.env)
 
 Cluster config:
   ${PEERS_FILE}    One peer hostname per line (e.g. radik.goldfinches.ru)
@@ -278,6 +304,19 @@ cmd_link() {
     echo "  ${slink/tg:\/\//https:\/\/t.me\/}"
 }
 
+cmd_config_sync_env() {
+    [ -f "$CONFIG_FILE" ] || die "Config file not found: $CONFIG_FILE"
+
+    replace_toml_value public_host "$PUBLIC_HOST"
+    replace_toml_number public_port "$MTPROTO_PORT"
+    replace_toml_value tls_domain "$TLS_DOMAIN"
+
+    echo "Updated $CONFIG_FILE from env:"
+    echo "  public_host = $PUBLIC_HOST"
+    echo "  public_port = $MTPROTO_PORT"
+    echo "  tls_domain = $TLS_DOMAIN"
+}
+
 cmd_stats() {
     local user="${1:-}"
     local data
@@ -450,6 +489,7 @@ case "$1" in
     list-users-plain) cmd_list_users_plain ;;
     link)             cmd_link "${2:-}" ;;
     stats)            cmd_stats "${2:-}" ;;
+    config-sync-env)  cmd_config_sync_env ;;
     sync)             cmd_sync ;;
     peers)            cmd_peers ;;
     zabbix)

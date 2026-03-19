@@ -23,10 +23,44 @@ cp data/config.toml.example data/config.toml
 
 Edit `data/config.toml`:
 - Set `public_host` to your server's domain
-- Set `tls_domain` to a site for TLS fronting (e.g. `www.google.com`)
+- Set `tls_domain` to **your own domain that resolves to this server IP**
+  (recommended: same value as `public_host`, e.g. `proxy.example.com`)
+
+> ⚠️ If you run Telegram through xray/sing-box (or another SNI-aware L7 router),
+> using third-party `tls_domain` like `www.google.com` can break MTProto:
+> the router may route traffic by SNI to the original website instead of your telemt host.
+> Use a domain you control that points to your telemt server.
 
 Edit `telemt-ctl`:
 - Set `PUBLIC_HOST` to your server's domain
+
+### FAQ: domain from env + certificates
+
+**Q: I already have a domain in an environment variable. Can I reuse it?**  
+Yes. Use the same domain value in both places:
+- `PUBLIC_HOST` (for generated links in `telemt-ctl`)
+- `tls_domain` in `data/config.toml` (for MTProto Fake TLS SNI)
+
+Example:
+
+```bash
+export TELEPROXY_DOMAIN=proxy.example.com
+PUBLIC_HOST="$TELEPROXY_DOMAIN" telemt-ctl list
+```
+
+And set in `data/config.toml`:
+
+```toml
+[general.links]
+public_host = "proxy.example.com"
+
+[censorship]
+tls_domain = "proxy.example.com"
+```
+
+**Q: Do I need a valid TLS certificate for `tls_domain`?**  
+For telemt MTProto Fake TLS itself, a public CA certificate is generally **not required**.  
+But if you place a real TLS terminator in front (Nginx/Caddy/CDN/reverse-proxy), then that front layer needs a valid certificate as usual.
 
 ### 2. Set permissions
 

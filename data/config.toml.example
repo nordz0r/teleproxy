@@ -25,7 +25,12 @@ whitelist = ["127.0.0.0/8", "172.16.0.0/12"]
 ip = "0.0.0.0"
 
 [censorship]
-tls_domain = "www.google.com"
+# IMPORTANT:
+# Use your own domain that resolves to THIS server IP (same as public_host),
+# e.g. "proxy.example.com" or "front.proxy.example.com".
+# Do not use third-party domains like google.com with xray/sing-box routing:
+# SNI-based routers may send traffic to the original website instead of telemt.
+tls_domain = "proxy.example.com"
 mask = true
 tls_emulation = true
 tls_front_dir = "tlsfront"

@@ -69,7 +69,7 @@ Environment variables:
   TELEPROXY_ENV_FILE         Path to env file (default: /opt/teleproxy/.env)
 
 Cluster config:
-  ${PEERS_FILE}    One peer hostname per line (e.g. radik.goldfinches.ru)
+  ${PEERS_FILE}    One peer hostname per line (e.g. peer1.example.com)
 
 EOF
     exit 1

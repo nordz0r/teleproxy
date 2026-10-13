@@ -1,19 +1,36 @@
-# Teleproxy
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset=".github/assets/banner-light.svg">
+    <img alt="nordz0r/teleproxy — прокси для Telegram" src=".github/assets/banner-light.svg" width="100%">
+  </picture>
+</p>
 
-Telegram proxy bundle: **MTProto (Fake TLS)** + **SOCKS5** with shared user management, Zabbix monitoring, and a single CLI tool.
+<p align="center"><b>Русский</b> · <a href="README.en.md">English</a></p>
 
-## What's inside
+<p align="center">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose_v2-2496ed?style=flat-square&logo=docker&logoColor=white">
+  <img alt="Shell" src="https://img.shields.io/badge/CLI-bash-4eaa25?style=flat-square&logo=gnubash&logoColor=white">
+  <img alt="MTProto" src="https://img.shields.io/badge/MTProto-Fake_TLS-26a5e4?style=flat-square&logo=telegram&logoColor=white">
+  <img alt="SOCKS5" src="https://img.shields.io/badge/SOCKS5-3proxy-555?style=flat-square">
+  <img alt="Zabbix" src="https://img.shields.io/badge/Zabbix-Agent_2-d40000?style=flat-square">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
+</p>
 
-| Service | Image | Port | Protocol |
-|---------|-------|------|----------|
+Набор прокси для Telegram: **MTProto (Fake TLS)** + **SOCKS5** с общим управлением пользователями, мониторингом в Zabbix и одной CLI-утилитой.
+
+## Что внутри
+
+| Сервис | Образ | Порт | Протокол |
+|--------|-------|------|----------|
 | [telemt](https://github.com/telemt/telemt) | `whn0thacked/telemt-docker` | 8443 | MTProto Fake TLS |
-| [3proxy](https://github.com/3proxy/3proxy) | `3proxy/3proxy` | 48731 | SOCKS5 with auth |
+| [3proxy](https://github.com/3proxy/3proxy) | `3proxy/3proxy` | 48731 | SOCKS5 с авторизацией |
 
-Both services share the same user credentials. Adding a user via `telemt-ctl` registers them in both MTProto and SOCKS5 simultaneously.
+У обоих сервисов общие учётные данные. Пользователь, добавленный через `telemt-ctl`, сразу регистрируется и в MTProto, и в SOCKS5.
 
-## Quick start
+## Быстрый старт
 
-### 1. Clone and configure
+### 1. Клонирование и настройка
 
 ```bash
 git clone https://github.com/nordz0r/teleproxy.git /opt/teleproxy
@@ -22,32 +39,32 @@ cp .env.example .env
 cp data/config.toml.example data/config.toml
 ```
 
-Edit `.env`:
-- Set `TELEPROXY_DOMAIN` to your server's domain
-- Optionally override `PUBLIC_HOST`, `TLS_DOMAIN`, `MTPROTO_PORT`, `SOCKS5_PORT`
+Отредактируйте `.env`:
+- задайте в `TELEPROXY_DOMAIN` домен вашего сервера;
+- при необходимости переопределите `PUBLIC_HOST`, `TLS_DOMAIN`, `MTPROTO_PORT`, `SOCKS5_PORT`.
 
-> ⚠️ If you run Telegram through xray/sing-box (or another SNI-aware L7 router),
-> using third-party `TLS_DOMAIN` like `www.google.com` can break MTProto:
-> the router may route traffic by SNI to the original website instead of your telemt host.
-> Use a domain you control that points to your telemt server.
+> ⚠️ Если Telegram у вас идёт через xray/sing-box (или другой L7-маршрутизатор, который смотрит на SNI),
+> чужой `TLS_DOMAIN` вроде `www.google.com` может сломать MTProto:
+> маршрутизатор отправит трафик по SNI на настоящий сайт, а не на ваш хост с telemt.
+> Используйте свой домен, который указывает на сервер с telemt.
 
-Generate or refresh `data/config.toml` host fields from env:
+Сгенерировать или обновить поля хоста в `data/config.toml` из env:
 
 ```bash
 ./telemt-ctl config-sync-env
 ```
 
-`telemt-ctl` reads `/opt/teleproxy/.env` by default, so the env file is the source of truth
-for generated links and for the host-related values written into `data/config.toml`.
+По умолчанию `telemt-ctl` читает `/opt/teleproxy/.env`, так что env-файл — источник истины
+для генерируемых ссылок и для значений хоста, которые пишутся в `data/config.toml`.
 
-### FAQ: domain from env + certificates
+### FAQ: домен из env и сертификаты
 
-**Q: I already have a domain in an environment variable. Can I reuse it?**  
-Yes. Use the same domain value in both places:
-- `TELEPROXY_DOMAIN` / `PUBLIC_HOST` (for generated links in `telemt-ctl`)
-- `TLS_DOMAIN` in `data/config.toml` via `telemt-ctl config-sync-env`
+**В: Домен уже лежит в переменной окружения. Можно его переиспользовать?**  
+Да. Используйте одно и то же значение в обоих местах:
+- `TELEPROXY_DOMAIN` / `PUBLIC_HOST` (для ссылок, которые генерирует `telemt-ctl`);
+- `TLS_DOMAIN` в `data/config.toml` через `telemt-ctl config-sync-env`.
 
-Example:
+Пример:
 
 ```bash
 export TELEPROXY_DOMAIN=proxy.example.com
@@ -55,8 +72,8 @@ export TELEPROXY_DOMAIN=proxy.example.com
 ./telemt-ctl list
 ```
 
-To override values in your current terminal or interactive shell,
-export them manually or put them in `.env` / `~/.bashrc`:
+Чтобы переопределить значения в текущем терминале или интерактивном shell,
+экспортируйте их вручную или пропишите в `.env` / `~/.bashrc`:
 
 ```bash
 export TELEPROXY_DOMAIN=proxy.example.com
@@ -65,12 +82,12 @@ export MTPROTO_PORT=8443
 export SOCKS5_PORT=48731
 ```
 
-If you run `telemt-ctl` through a non-interactive SSH command like
-`ssh root@host '/opt/teleproxy/telemt-ctl list'`, `~/.bashrc` may not be loaded.
-`telemt-ctl` avoids that problem by loading `/opt/teleproxy/.env` directly.
-If you keep env only in `~/.bashrc`, pass the vars inline or source the file explicitly.
+Если запускать `telemt-ctl` неинтерактивной SSH-командой вроде
+`ssh root@host '/opt/teleproxy/telemt-ctl list'`, `~/.bashrc` может не загрузиться.
+`telemt-ctl` обходит это, читая `/opt/teleproxy/.env` напрямую.
+Если env у вас только в `~/.bashrc`, передайте переменные в команде или явно сделайте `source`.
 
-After `./telemt-ctl config-sync-env`, `data/config.toml` should contain:
+После `./telemt-ctl config-sync-env` в `data/config.toml` должно быть:
 
 ```toml
 [general.links]
@@ -80,34 +97,34 @@ public_host = "proxy.example.com"
 tls_domain = "proxy.example.com"
 ```
 
-**Q: Do I need a valid TLS certificate for `tls_domain`?**  
-For telemt MTProto Fake TLS itself, a public CA certificate is generally **not required**.  
-But if you place a real TLS terminator in front (Nginx/Caddy/CDN/reverse-proxy), then that front layer needs a valid certificate as usual.
+**В: Нужен ли валидный TLS-сертификат для `tls_domain`?**  
+Самому telemt для MTProto Fake TLS сертификат от публичного CA, как правило, **не нужен**.  
+Но если перед ним стоит настоящий TLS-терминатор (Nginx/Caddy/CDN/reverse-proxy), этому слою, как обычно, нужен валидный сертификат.
 
-### 2. Set permissions
+### 2. Права
 
 ```bash
 chown -R 65532:65532 data/
 ```
 
-The telemt container runs as UID 65532 (nonroot) and needs write access to persist user changes via API.
+Контейнер telemt работает под UID 65532 (nonroot), и ему нужна запись, чтобы сохранять изменения пользователей через API.
 
-### 3. Start
+### 3. Запуск
 
 ```bash
 ./telemt-ctl config-sync-env
 docker compose up -d
 ```
 
-### 4. Add users
+### 4. Добавление пользователей
 
 ```bash
 ./telemt-ctl add alice
 ```
 
-Output includes ready-to-use `tg://proxy` and `tg://socks` links for both protocols.
+В выводе готовые ссылки `tg://proxy` и `tg://socks` для обоих протоколов.
 
-### 5. Symlink for convenience
+### 5. Симлинк для удобства
 
 ```bash
 ln -sf /opt/teleproxy/telemt-ctl /usr/local/bin/telemt-ctl
@@ -115,19 +132,19 @@ ln -sf /opt/teleproxy/telemt-ctl /usr/local/bin/telemt-ctl
 
 ## telemt-ctl
 
-Single CLI tool for managing users across both proxies.
+Одна CLI-утилита для управления пользователями в обоих прокси.
 
-### User management
+### Управление пользователями
 
 ```bash
-telemt-ctl add <username>      # Add user, print tg:// links
-telemt-ctl del <username>      # Remove user
-telemt-ctl list                # List all users with links
-telemt-ctl link <username>     # Show links for one user
-telemt-ctl stats [username]    # Connection stats (all or one)
+telemt-ctl add <username>      # добавить пользователя, вывести ссылки tg://
+telemt-ctl del <username>      # удалить пользователя
+telemt-ctl list                # все пользователи со ссылками
+telemt-ctl link <username>     # ссылки одного пользователя
+telemt-ctl stats [username]    # статистика подключений (всех или одного)
 ```
 
-### Example output
+### Пример вывода
 
 ```
 ────────────────────────────────────────
@@ -141,166 +158,170 @@ telemt-ctl stats [username]    # Connection stats (all or one)
 ────────────────────────────────────────
 ```
 
-### Environment variables
+### Переменные окружения
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TELEPROXY_DOMAIN` | `proxy.example.com` | Shared default for links and TLS SNI |
-| `PUBLIC_HOST` | `TELEPROXY_DOMAIN` | Hostname used in generated links |
-| `TLS_DOMAIN` | `TELEPROXY_DOMAIN` | TLS SNI written into `data/config.toml` |
-| `MTPROTO_PORT` | `8443` | MTProto port in links and config |
-| `SOCKS5_PORT` | `48731` | SOCKS5 port in links |
-| `TELEPROXY_ENV_FILE` | `/opt/teleproxy/.env` | Path to env file loaded by `telemt-ctl` |
+| Переменная | По умолчанию | Описание |
+|------------|--------------|----------|
+| `TELEPROXY_DOMAIN` | `proxy.example.com` | Общее значение по умолчанию для ссылок и TLS SNI |
+| `PUBLIC_HOST` | `TELEPROXY_DOMAIN` | Имя хоста в генерируемых ссылках |
+| `TLS_DOMAIN` | `TELEPROXY_DOMAIN` | TLS SNI, который пишется в `data/config.toml` |
+| `MTPROTO_PORT` | `8443` | Порт MTProto в ссылках и конфиге |
+| `SOCKS5_PORT` | `48731` | Порт SOCKS5 в ссылках |
+| `TELEPROXY_ENV_FILE` | `/opt/teleproxy/.env` | Путь к env-файлу, который читает `telemt-ctl` |
 
-Override per-call: `PUBLIC_HOST=other.host telemt-ctl list`
+Переопределение на один вызов: `PUBLIC_HOST=other.host telemt-ctl list`
 
-## Zabbix monitoring
+## Мониторинг в Zabbix
 
-### Install UserParameters
+### Установка UserParameters
 
 ```bash
 cp zabbix/telemt.conf /etc/zabbix/zabbix_agent2.d/
 systemctl restart zabbix-agent2
 ```
 
-### Available items
+### Доступные элементы данных
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `telemt.health` | Passive | 1 = healthy, 0 = down |
-| `telemt.users.count` | Passive | Number of users |
-| `telemt.conns.total` | Passive | Total active connections |
-| `telemt.octets.total` | Passive | Total bytes (B) |
-| `telemt.ips.total` | Passive | Total unique IPs |
+| Ключ | Тип | Описание |
+|------|-----|----------|
+| `telemt.health` | Passive | 1 = работает, 0 = недоступен |
+| `telemt.users.count` | Passive | Число пользователей |
+| `telemt.conns.total` | Passive | Всего активных подключений |
+| `telemt.octets.total` | Passive | Всего байт (B) |
+| `telemt.ips.total` | Passive | Всего уникальных IP |
 
-### Per-user LLD
+### LLD по пользователям
 
-Discovery rule: `telemt.user.discovery`
+Правило обнаружения: `telemt.user.discovery`
 
-Item prototypes:
+Прототипы элементов:
 - `telemt.user.conns[{#USERNAME}]`
 - `telemt.user.octets[{#USERNAME}]`
 - `telemt.user.ips[{#USERNAME}]`
 
-Recommended tags: `component: telemt`, `mtproto_user: {#USERNAME}`
+Рекомендуемые теги: `component: telemt`, `mtproto_user: {#USERNAME}`
 
-### Suggested triggers
+### Рекомендуемые триггеры
 
-| Severity | Expression |
-|----------|------------|
+| Важность | Выражение |
+|----------|-----------|
 | High | `last(/host/telemt.health)=0` |
 | Warning | `max(/host/telemt.conns.total,10m)=0` |
 
-## Cluster mode (multi-server)
+## Кластер (несколько серверов)
 
-Teleproxy supports automatic replication across multiple servers. When you add or remove a user on any node, the change is propagated to all peers via SSH.
+Teleproxy умеет автоматически реплицировать пользователей между серверами. Когда вы добавляете или удаляете пользователя на любом узле, изменение расходится по всем пирам через SSH.
 
-### Setup
+### Настройка
 
-1. **Configure SSH keys** between servers (root access):
+1. **Настройте SSH-ключи** между серверами (доступ root):
 
 ```bash
-# On each server, ensure passwordless SSH to all peers
+# На каждом сервере нужен SSH без пароля ко всем пирам
 ssh-copy-id root@node2.example.com
 ```
 
-2. **Create peers config** on each server:
+2. **Создайте конфиг пиров** на каждом сервере:
 
 ```bash
-# On node1 — list all OTHER nodes
+# На node1 — перечислить все ДРУГИЕ узлы
 echo "node2.example.com" > /opt/teleproxy/data/peers.conf
 
-# On node2 — list all OTHER nodes
+# На node2 — перечислить все ДРУГИЕ узлы
 echo "node1.example.com" > /opt/teleproxy/data/peers.conf
 ```
 
-3. **Point DNS** to all nodes (round-robin A records):
+3. **Направьте DNS** на все узлы (round-robin A-записи):
 
 ```
 tg.example.com  A  1.2.3.4    # node1
 tg.example.com  A  5.6.7.8    # node2
 ```
 
-### Usage
+### Использование
 
 ```bash
-# Add user — automatically replicated to all peers
+# Добавить пользователя — автоматически реплицируется на все пиры
 telemt-ctl add alice
 
-# Remove user — automatically replicated
+# Удалить пользователя — тоже реплицируется
 telemt-ctl del alice
 
-# Full sync — push local state to all peers (add missing, remove extra)
+# Полная синхронизация — разослать локальное состояние на все пиры (добавить недостающих, удалить лишних)
 telemt-ctl sync
 
-# Check peer health
+# Проверить здоровье пиров
 telemt-ctl peers
 
-# Local-only operation (no replication, used internally)
+# Только локально (без репликации, используется внутри)
 telemt-ctl --local add alice
 ```
 
-### How it works
+### Как это работает
 
-- `add`/`del` execute locally first, then SSH to each peer and run `telemt-ctl --local` there
-- `sync` treats the local server as the source of truth: adds missing users on peers, removes extra ones
-- Users are added with the same secret on all nodes, so `tg://` links work regardless of which server handles the connection
-- If a peer is unreachable during `add`/`del`, the operation continues — run `sync` later to fix drift
+- `add`/`del` сначала выполняются локально, затем по SSH на каждом пире запускается `telemt-ctl --local`.
+- `sync` считает локальный сервер источником истины: добавляет на пирах недостающих пользователей и удаляет лишних.
+- На всех узлах пользователь создаётся с одним и тем же секретом, поэтому ссылки `tg://` работают независимо от того, какой сервер принял подключение.
+- Если во время `add`/`del` пир недоступен, операция продолжается — потом запустите `sync`, чтобы выровнять расхождение.
 
-## Architecture
+## Архитектура
 
 ```
 /opt/teleproxy/
 ├── docker-compose.yml
-├── telemt-ctl              # Management script
+├── telemt-ctl              # скрипт управления
 ├── data/
-│   ├── config.toml         # Telemt config (managed by API)
-│   ├── 3proxy.cfg          # SOCKS5 config
-│   ├── socks5_passwd       # SOCKS5 users (auto-managed)
-│   └── peers.conf          # Cluster peers (optional)
+│   ├── config.toml         # конфиг telemt (управляется через API)
+│   ├── 3proxy.cfg          # конфиг SOCKS5
+│   ├── socks5_passwd       # пользователи SOCKS5 (ведётся автоматически)
+│   └── peers.conf          # пиры кластера (необязательно)
 └── zabbix/
-    └── telemt.conf          # Zabbix Agent 2 UserParameters
+    └── telemt.conf          # UserParameters для Zabbix Agent 2
 ```
 
-### How user management works
+### Как устроено управление пользователями
 
-`telemt-ctl add` does two things atomically:
-1. Calls telemt API (`POST /v1/users`) — adds user to MTProto and persists to `config.toml`
-2. Appends `user:CL:secret` to `socks5_passwd` for 3proxy
+`telemt-ctl add` делает два шага атомарно:
+1. Вызывает API telemt (`POST /v1/users`) — добавляет пользователя в MTProto и сохраняет в `config.toml`.
+2. Дописывает `user:CL:secret` в `socks5_passwd` для 3proxy.
 
-No container restart needed. Telemt API handles hot-reload, 3proxy reads the passwd file on each auth attempt.
+Перезапуск контейнеров не нужен. API telemt применяет изменения на лету, а 3proxy перечитывает файл паролей при каждой попытке авторизации.
 
-### Networking
+### Сеть
 
-- **telemt** runs in bridge mode with port mapping
-- **socks5** runs in `network_mode: host` — required for SOCKS5 UDP ASSOCIATE to work (3proxy needs to bind arbitrary UDP ports for relay)
+- **telemt** работает в bridge-режиме с пробросом портов.
+- **socks5** работает в `network_mode: host` — это нужно для SOCKS5 UDP ASSOCIATE (3proxy должен открывать произвольные UDP-порты для ретрансляции).
 
-## Important: voice calls
+## Важно: голосовые звонки
 
-Telegram's built-in proxy settings (both MTProto and SOCKS5) **do not support voice/video calls**. This is a [known limitation](https://github.com/telegramdesktop/tdesktop/issues/29665) of the Telegram client — it does not implement SOCKS5 UDP ASSOCIATE for call traffic.
+Встроенные настройки прокси в Telegram (и MTProto, и SOCKS5) **не поддерживают голосовые и видеозвонки**. Это [известное ограничение](https://github.com/telegramdesktop/tdesktop/issues/29665) клиента Telegram: он не реализует SOCKS5 UDP ASSOCIATE для трафика звонков.
 
-**What works:**
-- Messages, media, stickers, file transfers — fully work through both proxies
-- Voice/video calls — require a system-wide VPN or external proxifier app (Nekobox, Shadowrocket, v2rayN)
+**Что работает:**
+- сообщения, медиа, стикеры, файлы — полностью работают через оба прокси;
+- голосовые и видеозвонки — нужен системный VPN или внешний проксификатор (Nekobox, Shadowrocket, v2rayN).
 
-## Requirements
+## Требования
 
 - Docker + Docker Compose v2
-- `jq` and `xxd` on the host (for `telemt-ctl`)
-- Zabbix Agent 2 (optional, for monitoring)
+- `jq` и `xxd` на хосте (для `telemt-ctl`)
+- Zabbix Agent 2 (необязательно, для мониторинга)
 
-## Ports
+## Порты
 
-| Port | Protocol | Service |
-|------|----------|---------|
+| Порт | Протокол | Сервис |
+|------|----------|--------|
 | 8443 | TCP | MTProto Fake TLS |
 | 48731 | TCP+UDP | SOCKS5 |
-| 9090 | TCP (localhost) | Prometheus metrics |
-| 9091 | TCP (localhost) | Telemt management API |
+| 9090 | TCP (localhost) | Метрики Prometheus |
+| 9091 | TCP (localhost) | API управления telemt |
 
-## Links
+## Лицензия
 
-- [telemt](https://github.com/telemt/telemt) — MTProto proxy for Telegram (Rust + Tokio)
-- [telemt-docker](https://github.com/An0nX/telemt-docker) — Docker image for telemt
-- [3proxy](https://github.com/3proxy/3proxy) — Tiny free proxy server
-- [Telegram calls issue](https://github.com/telegramdesktop/tdesktop/issues/29665) — Calls don't work through built-in proxy
+MIT, см. [LICENSE](LICENSE).
+
+## Ссылки
+
+- [telemt](https://github.com/telemt/telemt) — MTProto-прокси для Telegram (Rust + Tokio)
+- [telemt-docker](https://github.com/An0nX/telemt-docker) — Docker-образ telemt
+- [3proxy](https://github.com/3proxy/3proxy) — маленький бесплатный прокси-сервер
+- [Проблема со звонками](https://github.com/telegramdesktop/tdesktop/issues/29665) — звонки не работают через встроенный прокси

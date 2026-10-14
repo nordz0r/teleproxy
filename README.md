@@ -266,6 +266,14 @@ telemt-ctl --local add alice
 
 ## Архитектура
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset=".github/assets/architecture-light.svg">
+    <img alt="Архитектура Teleproxy: Telegram → telemt / 3proxy; telemt-ctl управляет пользователями и реплицирует на пиры; мониторинг Zabbix" src=".github/assets/architecture-light.svg" width="100%">
+  </picture>
+</p>
+
 ```
 /opt/teleproxy/
 ├── docker-compose.yml

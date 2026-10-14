@@ -1,0 +1,244 @@
+{
+ "schemaVersion": "0.2.0",
+ "kind": "graph",
+ "id": "teleproxy-architecture",
+ "generatedAt": "2026-10-13T18:00:00.000Z",
+ "title": "Teleproxy architecture",
+ "summary": "telemt-ctl manages users in telemt (API) and 3proxy (passwd file), replicates over SSH; Zabbix reads telemt metrics.",
+ "lenses": [
+  "architecture"
+ ],
+ "layout": {
+  "direction": "right",
+  "laneOrder": [
+   "client",
+   "ctl",
+   "svc",
+   "ops"
+  ],
+  "rank": {
+   "tg": 1,
+   "ctl": 1,
+   "env": 0,
+   "telemt": 1,
+   "socks": 2,
+   "passwd": 3,
+   "peers": 1,
+   "zbx": 2
+  }
+ },
+ "provenance": {
+  "repo": {
+   "owner": "nordz0r",
+   "name": "teleproxy",
+   "host": "github.com"
+  },
+  "base": {
+   "sha": "0000000000000000000000000000000000000000",
+   "ref": "main"
+  },
+  "head": {
+   "sha": "0000000000000000000000000000000000000000",
+   "ref": "main"
+  },
+  "generator": {
+   "name": "manual",
+   "version": "1.0.0"
+  }
+ },
+ "lanes": [
+  {
+   "id": "client",
+   "label": "Clients",
+   "subtitle": "Telegram",
+   "order": 0
+  },
+  {
+   "id": "ctl",
+   "label": "Management",
+   "subtitle": "/opt/teleproxy",
+   "order": 1
+  },
+  {
+   "id": "svc",
+   "label": "Proxies",
+   "subtitle": "docker compose",
+   "order": 2
+  },
+  {
+   "id": "ops",
+   "label": "Ops",
+   "subtitle": "optional",
+   "order": 3
+  }
+ ],
+ "nodes": [
+  {
+   "id": "tg",
+   "label": "Telegram client",
+   "kind": "ui",
+   "delta": "unchanged",
+   "lane": "client",
+   "subtitle": "tg://proxy, tg://socks",
+   "files": [],
+   "badges": []
+  },
+  {
+   "id": "ctl",
+   "label": "telemt-ctl",
+   "kind": "app",
+   "delta": "unchanged",
+   "lane": "ctl",
+   "subtitle": "add / del / list / sync",
+   "files": [],
+   "badges": []
+  },
+  {
+   "id": "env",
+   "label": ".env",
+   "kind": "config",
+   "delta": "unchanged",
+   "lane": "ctl",
+   "subtitle": "TELEPROXY_DOMAIN, ports",
+   "files": [],
+   "badges": []
+  },
+  {
+   "id": "telemt",
+   "label": "telemt",
+   "kind": "service",
+   "delta": "unchanged",
+   "lane": "svc",
+   "subtitle": "MTProto Fake TLS :8443",
+   "files": [],
+   "badges": []
+  },
+  {
+   "id": "socks",
+   "label": "3proxy",
+   "kind": "service",
+   "delta": "unchanged",
+   "lane": "svc",
+   "subtitle": "SOCKS5 :48731",
+   "files": [],
+   "badges": []
+  },
+  {
+   "id": "passwd",
+   "label": "data/socks5_passwd",
+   "kind": "datastore",
+   "delta": "unchanged",
+   "lane": "svc",
+   "subtitle": "shared users",
+   "files": [],
+   "badges": []
+  },
+  {
+   "id": "peers",
+   "label": "Cluster peers",
+   "kind": "external",
+   "delta": "unchanged",
+   "lane": "ops",
+   "subtitle": "SSH, peers.conf",
+   "files": [],
+   "badges": []
+  },
+  {
+   "id": "zbx",
+   "label": "Zabbix Agent 2",
+   "kind": "external",
+   "delta": "unchanged",
+   "lane": "ops",
+   "subtitle": "telemt.* items, LLD",
+   "files": [],
+   "badges": []
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "from": "tg",
+   "to": "telemt",
+   "kind": "rpc",
+   "delta": "unchanged",
+   "label": "MTProto",
+   "emphasis": "hero",
+   "animated": true,
+   "files": []
+  },
+  {
+   "id": "e1",
+   "from": "tg",
+   "to": "socks",
+   "kind": "rpc",
+   "delta": "unchanged",
+   "label": "SOCKS5",
+   "emphasis": "normal",
+   "animated": true,
+   "files": []
+  },
+  {
+   "id": "e2",
+   "from": "env",
+   "to": "ctl",
+   "kind": "data",
+   "delta": "unchanged",
+   "emphasis": "muted",
+   "animated": false,
+   "files": []
+  },
+  {
+   "id": "e3",
+   "from": "ctl",
+   "to": "telemt",
+   "kind": "http",
+   "delta": "unchanged",
+   "label": "POST /v1/users",
+   "emphasis": "hero",
+   "animated": true,
+   "files": []
+  },
+  {
+   "id": "e4",
+   "from": "ctl",
+   "to": "passwd",
+   "kind": "data",
+   "delta": "unchanged",
+   "emphasis": "normal",
+   "animated": true,
+   "files": []
+  },
+  {
+   "id": "e5",
+   "from": "socks",
+   "to": "passwd",
+   "kind": "data",
+   "delta": "unchanged",
+   "emphasis": "muted",
+   "animated": false,
+   "files": []
+  },
+  {
+   "id": "e6",
+   "from": "ctl",
+   "to": "peers",
+   "kind": "rpc",
+   "delta": "unchanged",
+   "label": "telemt-ctl --local",
+   "emphasis": "normal",
+   "animated": true,
+   "files": []
+  },
+  {
+   "id": "e7",
+   "from": "zbx",
+   "to": "telemt",
+   "kind": "http",
+   "delta": "unchanged",
+   "emphasis": "muted",
+   "animated": false,
+   "files": []
+  }
+ ],
+ "flows": []
+}
